@@ -1,32 +1,11 @@
-/* =====================================================================
-   ASTROLAUNCH SIMULATOR v2
-   Multi-screen rocket launch simulator: Menu -> Planet Select -> Sim
-
-   SCREENS
-   -------
-   STATE_MENU            title screen, press ENTER
-   STATE_PLANET_SELECT   choose Earth / Mars / Moon with LEFT/RIGHT + ENTER
-   STATE_SIMULATION      launch and fly, physics specific to chosen body
-
-   PHYSICS (per planet)
-   ---------------------
-   g(h)      = mu / (R + h)^2            variable gravity with altitude
-   rho(h)    = rho0 * exp(-h / H)        exponential atmosphere (0 for Moon)
-   mdot      = Thrust / (Isp * g0)       fuel burn from real thrust/Isp relation
-   deltaV    = Isp * g0 * ln(m0/m_dry)   Tsiolkovsky rocket equation
-   v_escape  = sqrt(2 * mu / R)          escape velocity from the surface
-
-   CONTROLS
-   --------
-   Menu:            ENTER to continue
-   Planet select:   LEFT / RIGHT to choose, ENTER to launch
-   Simulation:      SPACE = thrust, R = reset, ESC = back to planet select
-   F11:             toggle fullscreen (any screen)
-   ===================================================================== */
-
 #define _CRT_SECURE_NO_WARNINGS
+#define WIN32_LEAN_AND_MEAN
+#define NOGDI
+#define NOUSER
+#include <windows.h>
 
 #include "raylib.h"
+#include "resource.h"
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,7 +47,7 @@ typedef struct Rocket {
 
 typedef struct Star { float x, y, brightness; } Star;
 
-/* ---------------------- Planet definitions ---------------------- */
+/*definitions of the planets*/
 static const Planet PLANETS[3] = {
     {
         "EARTH", "Thick nitrogen-oxygen atmosphere creates significant aerodynamic drag during ascent.",
@@ -138,8 +117,7 @@ void DrawTextF(const char* text, int x, int y, int fontSize, Color color)
     DrawTextEx(uiFont, text, (Vector2) { (float)x, (float)y }, (float)fontSize, 1.5f, color);
 }
 
-/* Draws text wrapped to fit within maxWidth pixels, one line at a time.
-   Returns the total height used, so callers can position what comes next. */
+/* Displays the text line by line so it stays within the maximum width, then returns the height used to help position the next content. */
 int DrawWrappedText(const char* text, int x, int y, int maxWidth, int fontSize, int lineSpacing, Color color)
 {
     char buffer[256];
@@ -179,7 +157,7 @@ int DrawWrappedText(const char* text, int x, int y, int maxWidth, int fontSize, 
     return linesDrawn * lineSpacing;
 }
 
-/* Draws a stylised, recognisable version of each body rather than a flat circle */
+/* Draws a shape of each planet */
 void DrawPlanetIcon(int planetIndex, const Planet* p, int cx, int cy, float radius)
 {
     DrawCircle(cx, cy, radius, p->bodyBase);
@@ -376,10 +354,8 @@ void DrawRocketShip(float cx, float topY, bool thrusting)
     }
 }
 
-/* Ends drawing to the fixed-size virtual canvas, then draws that whole canvas
-   scaled up (or down) to fill the real window/monitor, preserving aspect
-   ratio so nothing stretches or distorts - just gets bigger, with black
-   letterbox bars filling any leftover space. */
+/* Finishes drawing on the virtual canvas, then scales it to fit the actual window while keeping 
+the original proportions. This prevents stretching, with black bars filling any extra space. */
 void EndFrameAndPresent(RenderTexture2D target)
 {
     EndTextureMode();
@@ -402,6 +378,19 @@ void EndFrameAndPresent(RenderTexture2D target)
     EndDrawing();
 }
 
+/* This is what lets the font and icon travel inside the exe
+   instead of needing to sit next to it as separate files. */
+unsigned char* LoadEmbeddedResource(int resourceId, int* outSize)
+{
+    HMODULE hModule = GetModuleHandle(NULL);
+    HRSRC hRes = FindResource(hModule, MAKEINTRESOURCE(resourceId), RT_RCDATA);
+    if (!hRes) { *outSize = 0; return NULL; }
+    HGLOBAL hData = LoadResource(hModule, hRes);
+    if (!hData) { *outSize = 0; return NULL; }
+    *outSize = (int)SizeofResource(hModule, hRes);
+    return (unsigned char*)LockResource(hData);
+}
+
 int main(void)
 {
     InitWindow(SCREEN_W, SCREEN_H, "AstroLaunch Simulator");
@@ -410,17 +399,24 @@ int main(void)
     RenderTexture2D target = LoadRenderTexture(SCREEN_W, SCREEN_H);
     SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
 
-    const char* appDir = GetApplicationDirectory();
-    char iconPath[512];
-    snprintf(iconPath, sizeof(iconPath), "%srocket_icon.png", appDir);
-    Image iconImg = LoadImage(iconPath);
-    if (iconImg.data != NULL) SetWindowIcon(iconImg);
-    UnloadImage(iconImg);
+    /* Window icon - loaded from the PNG baked into the exe, not a disk file */
+    int iconDataSize = 0;
+    unsigned char* iconData = LoadEmbeddedResource(IDR_ICON_PNG_DATA, &iconDataSize);
+    if (iconData != NULL)
+    {
+        Image iconImg = LoadImageFromMemory(".png", iconData, iconDataSize);
+        SetWindowIcon(iconImg);
+        UnloadImage(iconImg);
+    }
 
     SetTargetFPS(60);
 
-    uiFont = LoadFont("C:/Windows/Fonts/bahnschrift.ttf");
-    if (uiFont.texture.id == 0) uiFont = GetFontDefault(); /* fallback if font not found */
+    /* Font - loaded from the TTF baked into the exe, not C:/Windows/Fonts */
+    int fontDataSize = 0;
+    unsigned char* fontData = LoadEmbeddedResource(IDR_FONT_DATA, &fontDataSize);
+    if (fontData != NULL)
+        uiFont = LoadFontFromMemory(".ttf", fontData, fontDataSize, 32, NULL, 0);
+    if (uiFont.texture.id == 0) uiFont = GetFontDefault(); /* fallback if embedded font fails to load */
 
     GameState state = STATE_MENU;
     int selectedPlanet = 0;
@@ -449,7 +445,7 @@ int main(void)
 
         if (IsKeyPressed(KEY_F11)) ToggleFullscreen();
 
-        /* ============================ STATE: MENU ============================ */
+        /*STATE: MENU*/
         if (state == STATE_MENU)
         {
             if (IsKeyPressed(KEY_ENTER)) state = STATE_PLANET_SELECT;
@@ -474,7 +470,7 @@ int main(void)
             continue;
         }
 
-        /* ======================= STATE: PLANET SELECT ======================= */
+        /*STATE: PLANET SELECT*/
         if (state == STATE_PLANET_SELECT)
         {
             if (IsKeyPressed(KEY_RIGHT)) selectedPlanet = (selectedPlanet + 1) % 3;
@@ -532,7 +528,7 @@ int main(void)
             continue;
         }
 
-        /* ========================== STATE: SIMULATION ========================= */
+        /* STATE: SIMULATION */
         const Planet* planet = &PLANETS[selectedPlanet];
 
         if (IsKeyPressed(KEY_ESCAPE)) { state = STATE_PLANET_SELECT; continue; }
@@ -653,3 +649,4 @@ int main(void)
     CloseWindow();
     return 0;
 }
+
