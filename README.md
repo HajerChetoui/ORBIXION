@@ -64,6 +64,7 @@ Each planet (Earth, Mars, Moon) uses its own real gravitational parameter, radiu
    ```
 3. Open this project in Visual Studio, set the platform to **x64**, and build.
 4. Run ( the app looks for `rocket_icon.png` and `bahnschrift.ttf` in the same folder as the executable at runtime (both included in this repo)).
+   OR: Install the application from the website provided (https://hajer-chetoui.itch.io/orbixion)
 
 ## Screenshots
 
