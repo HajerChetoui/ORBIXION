@@ -1,4 +1,4 @@
-# Orbixion
+# ORBIXION
 
 A physics-based 2D rocket launch simulator built in C with raylib. Choose Earth, Mars, or the Moon and launch a rocket governed by real orbital mechanics.
 
